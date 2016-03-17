@@ -406,6 +406,9 @@ static inline bool mem_cgroup_lruvec_online(struct lruvec *lruvec)
 	return !!(memcg->css.flags & CSS_ONLINE);
 }
 
+unsigned long mem_cgroup_node_nr_lru_pages(struct mem_cgroup *memcg,
+					   int nid, unsigned int lru_mask);
+
 static inline
 unsigned long mem_cgroup_get_lru_size(struct lruvec *lruvec, enum lru_list lru)
 {
@@ -659,6 +662,13 @@ static inline void
 mem_cgroup_update_lru_size(struct lruvec *lruvec, enum lru_list lru,
 			      int increment)
 {
+}
+
+static inline unsigned long
+mem_cgroup_node_nr_lru_pages(struct mem_cgroup *memcg,
+			     int nid, unsigned int lru_mask)
+{
+	return 0;
 }
 
 static inline void
