@@ -31,6 +31,7 @@
 #include "host.h"
 #include "slot-gpio.h"
 #include "pwrseq.h"
+#include "sdio_ops.h"
 
 static DEFINE_IDR(mmc_host_idr);
 static DEFINE_SPINLOCK(mmc_host_lock);
@@ -355,6 +356,7 @@ struct mmc_host *mmc_alloc_host(int extra, struct device *dev)
 	spin_lock_init(&host->lock);
 	init_waitqueue_head(&host->wq);
 	INIT_DELAYED_WORK(&host->detect, mmc_rescan);
+	INIT_DELAYED_WORK(&host->sdio_irq_work, sdio_irq_work);
 #ifdef CONFIG_PM
 	host->pm_notify.notifier_call = mmc_pm_notify;
 #endif
