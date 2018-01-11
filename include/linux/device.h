@@ -277,6 +277,7 @@ struct device_driver {
 	const struct attribute_group **groups;
 
 	const struct dev_pm_ops *pm;
+	int (*coredump) (struct device *dev);
 
 	struct driver_private *p;
 };
@@ -289,7 +290,6 @@ extern struct device_driver *driver_find(const char *name,
 					 struct bus_type *bus);
 extern int driver_probe_done(void);
 extern void wait_for_device_probe(void);
-
 
 /* sysfs interface for exporting driver attributes */
 
