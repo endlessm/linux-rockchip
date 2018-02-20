@@ -1,3 +1,9 @@
+linux-rockchip (4.4.112-0) eos; urgency=medium
+
+  * Initial packaging
+
+ -- Carlo Caione <carlo@endlessm.com>  Tue, 20 Feb 2018 17:04:45 +0000
+
 linux (4.4.6-1) unstable; urgency=medium
 
   [ Salvatore Bonaccorso ]

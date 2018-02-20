@@ -64,15 +64,16 @@ ifeq ($(DEBUG),True)
 endif
 binary-arch-flavour: install-headers_$(ARCH)_$(FEATURESET)_$(FLAVOUR)
 
-ifneq ($(DO_DOCS),False)
-  binary-indep: install-doc
-  binary-indep: install-manual
-  build-indep: $(STAMPS_DIR)/build-doc
-else
+#ifneq ($(DO_DOCS),False)
+#  binary-indep: install-doc
+#  binary-indep: install-manual
+#  build-indep: $(STAMPS_DIR)/build-doc
+#else
   build-indep:
-endif
-binary-indep: install-source
-binary-indep: install-support
+#endif
+#binary-indep: install-source
+#binary-indep: install-support
+binary-indep:
 
 build-arch: $(STAMPS_DIR)/build_$(ARCH)_$(FEATURESET)_$(FLAVOUR)
 
@@ -116,8 +117,8 @@ cd '$(DIR)' && QUILT_PATCHES='$(CURDIR)/debian/patches' QUILT_SERIES=series-$(1)
 endef
 
 $(STAMPS_DIR)/source:
-	test -d .pc
-	set +e; QUILT_PC=.pc quilt unapplied --quiltrc - >/dev/null && echo 'Patch series not fully applied'; test $$? -eq 1
+#	test -d .pc
+#	set +e; QUILT_PC=.pc quilt unapplied --quiltrc - >/dev/null && echo 'Patch series not fully applied'; test $$? -eq 1
 	@$(stamp)
 
 $(STAMPS_DIR)/source_%: SOURCE_DIR=$(BUILD_DIR)/source
