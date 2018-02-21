@@ -8,7 +8,6 @@
 *-di
 /build/
 /config.defines.dump
-/control
 /control.md5sum
 /files
 /linux-*
