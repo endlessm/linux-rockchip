@@ -1,7 +1,6 @@
 [base]
 flavours:
- armmp
- armmp-lpae
+ rockchip
 kernel-arch: arm
 
 [build]
@@ -34,3 +33,6 @@ configs:
  armhf/config.armmp
  armhf/config.lpae
 
+[rockchip_description]
+hardware: RK3288
+hardware-long: RK3288
