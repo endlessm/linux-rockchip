@@ -54,9 +54,10 @@ binary-arch-arch:
 ifneq ($(DO_HEADERS_ALL),False)
   binary-arch-arch: install-headers_$(ARCH)
 endif
-ifneq ($(DO_LIBC),False)
-  binary-arch-arch: install-libc-dev_$(ARCH)
-endif
+#ifneq ($(DO_LIBC),False)
+#  binary-arch-arch: install-libc-dev_$(ARCH)
+#endif
+binary-arch-arch:
 binary-arch-featureset: install-headers_$(ARCH)_$(FEATURESET)
 binary-arch-flavour: install-image_$(ARCH)_$(FEATURESET)_$(FLAVOUR)
 ifeq ($(DEBUG),True)

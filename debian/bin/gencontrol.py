@@ -157,11 +157,11 @@ class Gencontrol(Base):
             packages_headers_arch = []
             makeflags['DO_HEADERS_ALL'] = False
 
-        if self.config.merge('packages').get('libc-dev', True):
-            libc_dev = self.templates["control.libc-dev"]
-            packages_headers_arch[0:0] = self.process_packages(libc_dev, {})
-        else:
-            makeflags['DO_LIBC'] = False
+#        if self.config.merge('packages').get('libc-dev', True):
+#            libc_dev = self.templates["control.libc-dev"]
+#            packages_headers_arch[0:0] = self.process_packages(libc_dev, {})
+#        else:
+#            makeflags['DO_LIBC'] = False
 
 
 
