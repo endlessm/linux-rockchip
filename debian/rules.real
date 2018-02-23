@@ -364,7 +364,12 @@ install-image_$(ARCH)_$(FEATURESET)_$(FLAVOUR):
 	dh_testroot
 	dh_prep
 	dh_installdirs 'boot'
-	install -m644 '$(DIR)/$(IMAGE_FILE)' $(INSTALL_DIR)/$(IMAGE_INSTALL_STEM)-$(REAL_VERSION)
+	## Generate kernel.signed
+	cp sign-kernel.sh kernel.its kernel.flags dummy.txt $(DIR)
+	cd $(DIR) && ./sign-kernel.sh
+	mv $(DIR)/kernel.signed $(DIR)/$(IMAGE_FILE).signed
+	install -m644 '$(DIR)/$(IMAGE_FILE).signed' $(INSTALL_DIR)/$(IMAGE_INSTALL_STEM)-$(REAL_VERSION)
+	install -m644 '$(DIR)/$(IMAGE_FILE)' $(INSTALL_DIR)/$(IMAGE_INSTALL_STEM)-$(REAL_VERSION).unsigned
 	+$(MAKE_SELF) \
 	  install-image_$(ARCH)_$(FEATURESET)_$(FLAVOUR)_dt \
 	  DIR='$(DIR)' PACKAGE_DIR='$(PACKAGE_DIR)' REAL_VERSION='$(REAL_VERSION)'
