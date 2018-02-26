@@ -369,7 +369,9 @@ install-image_$(ARCH)_$(FEATURESET)_$(FLAVOUR):
 	cp sign-kernel.sh kernel.its kernel.flags dummy.txt $(DIR)
 	cd $(DIR) && ./sign-kernel.sh
 	mv $(DIR)/kernel.signed $(DIR)/$(IMAGE_FILE).signed
-	install -m644 '$(DIR)/$(IMAGE_FILE).signed' $(INSTALL_DIR)/$(IMAGE_INSTALL_STEM)-$(REAL_VERSION)
+	mv $(DIR)/kernel.itb $(DIR)/$(IMAGE_FILE).itb
+	install -m644 '$(DIR)/$(IMAGE_FILE).signed' $(INSTALL_DIR)/$(IMAGE_INSTALL_STEM)-$(REAL_VERSION).signed
+	install -m644 '$(DIR)/$(IMAGE_FILE).itb' $(INSTALL_DIR)/$(IMAGE_INSTALL_STEM)-$(REAL_VERSION).itb
 	install -m644 '$(DIR)/$(IMAGE_FILE)' $(INSTALL_DIR)/$(IMAGE_INSTALL_STEM)-$(REAL_VERSION).unsigned
 	+$(MAKE_SELF) \
 	  install-image_$(ARCH)_$(FEATURESET)_$(FLAVOUR)_dt \
