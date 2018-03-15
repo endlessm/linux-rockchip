@@ -177,12 +177,19 @@ static void ts3a227e_new_jack_state(struct ts3a227e *ts3a227e, unsigned acc_reg)
 	if (mic_present != ts3a227e->mic_present) {
 		ts3a227e->mic_present = mic_present;
 		ts3a227e->buttons_held = 0;
+
+		/*
+		 * Temporarly disable the key press detection
+		 * https://phabricator.endlessm.com/T21542
+		 */
+#if 0
 		if (mic_present) {
 			/* Enable key press detection. */
 			regmap_update_bits(ts3a227e->regmap,
 					   TS3A227E_REG_SETTING_2,
 					   KP_ENABLE, KP_ENABLE);
 		}
+#endif
 	}
 }
 
