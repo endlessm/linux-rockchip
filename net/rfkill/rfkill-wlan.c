@@ -301,8 +301,8 @@ int rockchip_wifi_power(int on)
 
     LOG("%s: %d\n", __func__, on);
 
-	if (!on && primary_sdio_host)
-		mmc_pwrseq_power_off(primary_sdio_host);
+//	if (!on && primary_sdio_host)
+//		mmc_pwrseq_power_off(primary_sdio_host);
 
     if (mrfkill == NULL) {
         LOG("%s: rfkill-wlan driver has not Successful initialized\n", __func__);
