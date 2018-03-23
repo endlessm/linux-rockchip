@@ -642,9 +642,11 @@ static int rfkill_rk_probe(struct platform_device *pdev)
 		goto fail_alloc;
 
     rfkill_set_states(rfkill->rfkill_dev, BT_BLOCKED, false);
+#if 0
 	ret = rfkill_register(rfkill->rfkill_dev);
 	if (ret < 0)
 		goto fail_rfkill;
+#endif
 
     INIT_DELAYED_WORK(&rfkill->bt_sleep_delay_work, rfkill_rk_delay_sleep_bt);
 
@@ -665,8 +667,10 @@ static int rfkill_rk_probe(struct platform_device *pdev)
 
 	return 0;
 
+#if 0
 fail_rfkill:
 	rfkill_destroy(rfkill->rfkill_dev);
+#endif
 fail_alloc:
 
 	remove_proc_entry("btwrite", sleep_dir);
