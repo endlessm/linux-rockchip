@@ -686,7 +686,8 @@ static void rk808_syscore_shutdown(void)
 	 * been stopped or PMIC may not be able to get i2c transfer while
 	 * there are too many devices are competiting.
 	 */
-	if (system_state == SYSTEM_POWER_OFF) {
+	if (system_state == SYSTEM_POWER_OFF ||
+	    system_state == SYSTEM_HALT) {
 		/* power off supplies ! */
 		if (pm_shutdown) {
 			dev_info(&rk808_i2c_client->dev, "System power off\n");
