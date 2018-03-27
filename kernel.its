@@ -15,7 +15,7 @@
             entry = <0>;
         };
         fdt@1{
-            description = "rk3288-veyron-speedy.dtb";
+            description = "rk3288-veyron-jerry.dtb";
             data = /incbin/("arch/arm/boot/dts/rk3288-veyron-jerry.dtb");
             type = "flat_dt";
             arch = "arm";
