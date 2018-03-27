@@ -1,3 +1,17 @@
+#
+# Masking options
+#
+
+# Needed to successfully boot
+CONFIG_DEBUG_LL=n
+
+# Mask the phantom bluetooth device
+CONFIG_BT_HCIBTSDIO=n
+
+#
+# rockchip_linux_defconfig
+#
+
 # CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_DEFAULT_HOSTNAME="localhost"
 CONFIG_SYSVIPC=y
