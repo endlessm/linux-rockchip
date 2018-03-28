@@ -465,6 +465,16 @@ static ssize_t bluesleep_write_proc_btwrite(struct file *file,
     return count;
 }
 
+static ssize_t bluetooth_reset_write(struct file *file,
+				     const char __user *buffer,
+				     size_t count, loff_t *data)
+{
+    struct rfkill_rk_data *rfkill = g_rfkill;
+
+    rfkill_rk_set_power(rfkill, BT_UNBLOCK);
+    return count;
+}
+
 #ifdef CONFIG_OF
 static int bluetooth_platdata_parse_dt(struct device *dev,
                   struct rfkill_rk_platform_data *data)
@@ -540,6 +550,11 @@ static int bluetooth_platdata_parse_dt(struct device *dev,
 }
 #endif //CONFIG_OF
 
+static const struct file_operations bluetooth_reset = {
+    .owner = THIS_MODULE,
+    .write = bluetooth_reset_write,
+};
+
 static const struct file_operations bluesleep_lpm = {
     .owner = THIS_MODULE,
     .read = bluesleep_read_proc_lpm,
@@ -594,6 +609,13 @@ static int rfkill_rk_probe(struct platform_device *pdev)
         return -ENOMEM;
     }
 
+    ent = proc_create("reset", 0, bluetooth_dir, &bluetooth_reset);
+    if (ent == NULL) {
+        LOG("Unable to create /proc/%s/reset entry", PROC_DIR);
+        ret = -ENOMEM;
+        goto fail_alloc;
+    }
+
     sleep_dir = proc_mkdir("sleep", bluetooth_dir);
     if (sleep_dir == NULL) {
         LOG("Unable to create /proc/%s directory", PROC_DIR);
@@ -642,9 +664,11 @@ static int rfkill_rk_probe(struct platform_device *pdev)
 		goto fail_alloc;
 
     rfkill_set_states(rfkill->rfkill_dev, BT_BLOCKED, false);
+#if 0
 	ret = rfkill_register(rfkill->rfkill_dev);
 	if (ret < 0)
 		goto fail_rfkill;
+#endif
 
     INIT_DELAYED_WORK(&rfkill->bt_sleep_delay_work, rfkill_rk_delay_sleep_bt);
 
@@ -665,8 +689,10 @@ static int rfkill_rk_probe(struct platform_device *pdev)
 
 	return 0;
 
+#if 0
 fail_rfkill:
 	rfkill_destroy(rfkill->rfkill_dev);
+#endif
 fail_alloc:
 
 	remove_proc_entry("btwrite", sleep_dir);
