@@ -722,8 +722,7 @@ static irqreturn_t sbs_irq(int irq, void *devid)
 	return IRQ_HANDLED;
 }
 
-static void sbs_alert(struct i2c_client *client, enum i2c_alert_protocol prot,
-	unsigned int data)
+static void sbs_alert(struct i2c_client *client, unsigned int data)
 {
 	sbs_supply_changed(i2c_get_clientdata(client));
 }
