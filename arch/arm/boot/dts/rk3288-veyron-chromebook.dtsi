@@ -99,7 +99,7 @@
 		pwm-delay-us = <10000>;
 	};
 
-	gpio-charger {
+	gpiocharger: gpio-charger {
 		compatible = "gpio-charger";
 		charger-type = "mains";
 		gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
