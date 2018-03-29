@@ -12,25 +12,21 @@
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
+#include <linux/delay.h>
 #include <linux/err.h>
-#include <linux/power_supply.h>
+#include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
-#include <linux/slab.h>
+#include <linux/init.h>
 #include <linux/interrupt.h>
-#include <linux/gpio.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/of.h>
-#include <linux/stat.h>
-
 #include <linux/power/sbs-battery.h>
+#include <linux/power_supply.h>
+#include <linux/slab.h>
+#include <linux/stat.h>
 
 enum {
 	REG_MANUFACTURER_DATA,
@@ -41,6 +37,7 @@ enum {
 	REG_TIME_TO_EMPTY,
 	REG_TIME_TO_FULL,
 	REG_STATUS,
+	REG_CAPACITY_LEVEL,
 	REG_CYCLE_COUNT,
 	REG_SERIAL_NUMBER,
 	REG_REMAINING_CAPACITY,
@@ -59,8 +56,8 @@ enum {
 #define BATTERY_MODE_OFFSET		0x03
 #define BATTERY_MODE_MASK		0x8000
 enum sbs_battery_mode {
-	BATTERY_MODE_AMPS,
-	BATTERY_MODE_WATTS
+	BATTERY_MODE_AMPS = 0,
+	BATTERY_MODE_WATTS = 0x8000
 };
 
 /* manufacturer access defines */
@@ -68,6 +65,7 @@ enum sbs_battery_mode {
 #define MANUFACTURER_ACCESS_SLEEP	0x0011
 
 /* battery status value bits */
+#define BATTERY_INITIALIZED		0x80
 #define BATTERY_DISCHARGING		0x40
 #define BATTERY_FULL_CHARGED		0x20
 #define BATTERY_FULL_DISCHARGED		0x10
@@ -110,6 +108,8 @@ static const struct chip_data {
 		SBS_DATA(POWER_SUPPLY_PROP_TIME_TO_FULL_AVG, 0x13, 0, 65535),
 	[REG_STATUS] =
 		SBS_DATA(POWER_SUPPLY_PROP_STATUS, 0x16, 0, 65535),
+	[REG_CAPACITY_LEVEL] =
+		SBS_DATA(POWER_SUPPLY_PROP_CAPACITY_LEVEL, 0x16, 0, 65535),
 	[REG_CYCLE_COUNT] =
 		SBS_DATA(POWER_SUPPLY_PROP_CYCLE_COUNT, 0x17, 0, 65535),
 	[REG_DESIGN_CAPACITY] =
@@ -131,6 +131,7 @@ static const struct chip_data {
 
 static enum power_supply_property sbs_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
@@ -158,15 +159,15 @@ static enum power_supply_property sbs_properties[] = {
 struct sbs_info {
 	struct i2c_client		*client;
 	struct power_supply		*power_supply;
-	struct sbs_platform_data	*pdata;
 	bool				is_present;
-	bool				gpio_detect;
+	struct gpio_desc		*gpio_detect;
 	bool				enable_detection;
-	int				irq;
 	int				last_state;
 	int				poll_time;
+	u32				i2c_retry_count;
+	u32				poll_retry_count;
 	struct delayed_work		work;
-	int				ignore_changes;
+	struct mutex			mode_lock;
 };
 
 static char model_name[I2C_SMBUS_BLOCK_MAX + 1];
@@ -176,11 +177,8 @@ static bool force_load;
 static int sbs_read_word_data(struct i2c_client *client, u8 address)
 {
 	struct sbs_info *chip = i2c_get_clientdata(client);
+	int retries = chip->i2c_retry_count;
 	s32 ret = 0;
-	int retries = 1;
-
-	if (chip->pdata)
-		retries = max(chip->pdata->i2c_retry_count + 1, 1);
 
 	while (retries > 0) {
 		ret = i2c_smbus_read_word_data(client, address);
@@ -196,7 +194,7 @@ static int sbs_read_word_data(struct i2c_client *client, u8 address)
 		return ret;
 	}
 
-	return le16_to_cpu(ret);
+	return ret;
 }
 
 static int sbs_read_string_data(struct i2c_client *client, u8 address,
@@ -204,13 +202,11 @@ static int sbs_read_string_data(struct i2c_client *client, u8 address,
 {
 	struct sbs_info *chip = i2c_get_clientdata(client);
 	s32 ret = 0, block_length = 0;
-	int retries_length = 1, retries_block = 1;
+	int retries_length, retries_block;
 	u8 block_buffer[I2C_SMBUS_BLOCK_MAX + 1];
 
-	if (chip->pdata) {
-		retries_length = max(chip->pdata->i2c_retry_count + 1, 1);
-		retries_block = max(chip->pdata->i2c_retry_count + 1, 1);
-	}
+	retries_length = chip->i2c_retry_count;
+	retries_block = chip->i2c_retry_count;
 
 	/* Adapter needs to support these two functions */
 	if (!i2c_check_functionality(client->adapter,
@@ -264,22 +260,18 @@ static int sbs_read_string_data(struct i2c_client *client, u8 address,
 	memcpy(values, block_buffer + 1, block_length);
 	values[block_length] = '\0';
 
-	return le16_to_cpu(ret);
+	return ret;
 }
 
 static int sbs_write_word_data(struct i2c_client *client, u8 address,
 	u16 value)
 {
 	struct sbs_info *chip = i2c_get_clientdata(client);
+	int retries = chip->i2c_retry_count;
 	s32 ret = 0;
-	int retries = 1;
-
-	if (chip->pdata)
-		retries = max(chip->pdata->i2c_retry_count + 1, 1);
 
 	while (retries > 0) {
-		ret = i2c_smbus_write_word_data(client, address,
-			le16_to_cpu(value));
+		ret = i2c_smbus_write_word_data(client, address, value);
 		if (ret >= 0)
 			break;
 		retries--;
@@ -295,38 +287,52 @@ static int sbs_write_word_data(struct i2c_client *client, u8 address,
 	return 0;
 }
 
+static int sbs_status_correct(struct i2c_client *client, int *intval)
+{
+	int ret;
+
+	ret = sbs_read_word_data(client, sbs_data[REG_CURRENT].addr);
+	if (ret < 0)
+		return ret;
+
+	ret = (s16)ret;
+
+	/* Not drawing current means full (cannot be not charging) */
+	if (ret == 0)
+		*intval = POWER_SUPPLY_STATUS_FULL;
+
+	if (*intval == POWER_SUPPLY_STATUS_FULL) {
+		/* Drawing or providing current when full */
+		if (ret > 0)
+			*intval = POWER_SUPPLY_STATUS_CHARGING;
+		else if (ret < 0)
+			*intval = POWER_SUPPLY_STATUS_DISCHARGING;
+	}
+
+	return 0;
+}
+
 static int sbs_get_battery_presence_and_health(
 	struct i2c_client *client, enum power_supply_property psp,
 	union power_supply_propval *val)
 {
 	s32 ret;
-	struct sbs_info *chip = i2c_get_clientdata(client);
 
-	if (psp == POWER_SUPPLY_PROP_PRESENT &&
-		chip->gpio_detect) {
-		ret = gpio_get_value(chip->pdata->battery_detect);
-		if (ret == chip->pdata->battery_detect_present)
-			val->intval = 1;
-		else
-			val->intval = 0;
-		chip->is_present = val->intval;
-		return ret;
-	}
+	/*
+	 * Write to ManufacturerAccess with ManufacturerAccess command
+	 * and then read the status. Do not check for error on the write
+	 * since not all batteries implement write access to this command,
+	 * while others mandate it.
+	 */
+	sbs_write_word_data(client, sbs_data[REG_MANUFACTURER_DATA].addr,
+			    MANUFACTURER_ACCESS_STATUS);
 
-	/* Write to ManufacturerAccess with
-	 * ManufacturerAccess command and then
-	 * read the status */
-	ret = sbs_write_word_data(client, sbs_data[REG_MANUFACTURER_DATA].addr,
-					MANUFACTURER_ACCESS_STATUS);
+	ret = sbs_read_word_data(client, sbs_data[REG_MANUFACTURER_DATA].addr);
 	if (ret < 0) {
 		if (psp == POWER_SUPPLY_PROP_PRESENT)
 			val->intval = 0; /* battery removed */
 		return ret;
 	}
-
-	ret = sbs_read_word_data(client, sbs_data[REG_MANUFACTURER_DATA].addr);
-	if (ret < 0)
-		return ret;
 
 	if (ret < sbs_data[REG_MANUFACTURER_DATA].min_value ||
 	    ret > sbs_data[REG_MANUFACTURER_DATA].max_value) {
@@ -377,17 +383,32 @@ static int sbs_get_battery_property(struct i2c_client *client,
 	if (ret >= sbs_data[reg_offset].min_value &&
 	    ret <= sbs_data[reg_offset].max_value) {
 		val->intval = ret;
-		if (psp != POWER_SUPPLY_PROP_STATUS)
+		if (psp == POWER_SUPPLY_PROP_CAPACITY_LEVEL) {
+			if (!(ret & BATTERY_INITIALIZED))
+				val->intval =
+					POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
+			else if (ret & BATTERY_FULL_CHARGED)
+				val->intval =
+					POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+			else if (ret & BATTERY_FULL_DISCHARGED)
+				val->intval =
+					POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+			else
+				val->intval =
+					POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 			return 0;
+		} else if (psp != POWER_SUPPLY_PROP_STATUS) {
+			return 0;
+		}
 
 		if (ret & BATTERY_FULL_CHARGED)
 			val->intval = POWER_SUPPLY_STATUS_FULL;
-		else if (ret & BATTERY_FULL_DISCHARGED)
-			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
 		else if (ret & BATTERY_DISCHARGING)
 			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
 		else
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+
+		sbs_status_correct(client, &val->intval);
 
 		if (chip->poll_time == 0)
 			chip->last_state = val->intval;
@@ -399,6 +420,11 @@ static int sbs_get_battery_property(struct i2c_client *client,
 	} else {
 		if (psp == POWER_SUPPLY_PROP_STATUS)
 			val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
+		else if (psp == POWER_SUPPLY_PROP_CAPACITY)
+			/* sbs spec says that this can be >100 %
+			 * even if max value is 100 %
+			 */
+			val->intval = min(ret, 100);
 		else
 			val->intval = 0;
 	}
@@ -488,6 +514,8 @@ static enum sbs_battery_mode sbs_set_battery_mode(struct i2c_client *client,
 	if (ret < 0)
 		return ret;
 
+	usleep_range(1000, 2000);
+
 	return original_val & BATTERY_MODE_MASK;
 }
 
@@ -509,12 +537,7 @@ static int sbs_get_battery_capacity(struct i2c_client *client,
 	if (ret < 0)
 		return ret;
 
-	if (psp == POWER_SUPPLY_PROP_CAPACITY) {
-		/* sbs spec says that this can be >100 %
-		* even if max value is 100 % */
-		val->intval = min(ret, 100);
-	} else
-		val->intval = ret;
+	val->intval = ret;
 
 	ret = sbs_set_battery_mode(client, mode);
 	if (ret < 0)
@@ -533,7 +556,7 @@ static int sbs_get_battery_serial_number(struct i2c_client *client,
 	if (ret < 0)
 		return ret;
 
-	ret = sprintf(sbs_serial, "%04x", ret);
+	sprintf(sbs_serial, "%04x", ret);
 	val->strval = sbs_serial;
 
 	return 0;
@@ -561,6 +584,19 @@ static int sbs_get_property(struct power_supply *psy,
 	struct sbs_info *chip = power_supply_get_drvdata(psy);
 	struct i2c_client *client = chip->client;
 
+	if (chip->gpio_detect) {
+		ret = gpiod_get_value_cansleep(chip->gpio_detect);
+		if (ret < 0)
+			return ret;
+		if (psp == POWER_SUPPLY_PROP_PRESENT) {
+			val->intval = ret;
+			chip->is_present = val->intval;
+			return 0;
+		}
+		if (ret == 0)
+			return -ENODATA;
+	}
+
 	switch (psp) {
 	case POWER_SUPPLY_PROP_PRESENT:
 	case POWER_SUPPLY_PROP_HEALTH:
@@ -579,12 +615,17 @@ static int sbs_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGE_NOW:
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-	case POWER_SUPPLY_PROP_CAPACITY:
 		ret = sbs_get_property_index(client, psp);
 		if (ret < 0)
 			break;
 
+		/* sbs_get_battery_capacity() will change the battery mode
+		 * temporarily to read the requested attribute. Ensure we stay
+		 * in the desired mode for the duration of the attribute read.
+		 */
+		mutex_lock(&chip->mode_lock);
 		ret = sbs_get_battery_capacity(client, ret, psp, val);
+		mutex_unlock(&chip->mode_lock);
 		break;
 
 	case POWER_SUPPLY_PROP_SERIAL_NUMBER:
@@ -592,6 +633,7 @@ static int sbs_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_STATUS:
+	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
@@ -600,6 +642,7 @@ static int sbs_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TIME_TO_FULL_AVG:
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
+	case POWER_SUPPLY_PROP_CAPACITY:
 		ret = sbs_get_property_index(client, psp);
 		if (ret < 0)
 			break;
@@ -661,29 +704,38 @@ done:
 	return 0;
 }
 
+static void sbs_supply_changed(struct sbs_info *chip)
+{
+	struct power_supply *battery = chip->power_supply;
+	int ret;
+
+	ret = gpiod_get_value_cansleep(chip->gpio_detect);
+	if (ret < 0)
+		return;
+	chip->is_present = ret;
+	power_supply_changed(battery);
+}
+
 static irqreturn_t sbs_irq(int irq, void *devid)
 {
-	struct power_supply *battery = devid;
-
-	power_supply_changed(battery);
-
+	sbs_supply_changed(devid);
 	return IRQ_HANDLED;
+}
+
+static void sbs_alert(struct i2c_client *client, unsigned int data)
+{
+	sbs_supply_changed(i2c_get_clientdata(client));
 }
 
 static void sbs_external_power_changed(struct power_supply *psy)
 {
 	struct sbs_info *chip = power_supply_get_drvdata(psy);
 
-	if (chip->ignore_changes > 0) {
-		chip->ignore_changes--;
-		return;
-	}
-
 	/* cancel outstanding work */
 	cancel_delayed_work_sync(&chip->work);
 
 	schedule_delayed_work(&chip->work, HZ);
-	chip->poll_time = chip->pdata->poll_retry_count;
+	chip->poll_time = chip->poll_retry_count;
 }
 
 static void sbs_delayed_work(struct work_struct *work)
@@ -702,12 +754,12 @@ static void sbs_delayed_work(struct work_struct *work)
 
 	if (ret & BATTERY_FULL_CHARGED)
 		ret = POWER_SUPPLY_STATUS_FULL;
-	else if (ret & BATTERY_FULL_DISCHARGED)
-		ret = POWER_SUPPLY_STATUS_NOT_CHARGING;
 	else if (ret & BATTERY_DISCHARGING)
 		ret = POWER_SUPPLY_STATUS_DISCHARGING;
 	else
 		ret = POWER_SUPPLY_STATUS_CHARGING;
+
+	sbs_status_correct(chip->client, &ret);
 
 	if (chip->last_state != ret) {
 		chip->poll_time = 0;
@@ -720,80 +772,6 @@ static void sbs_delayed_work(struct work_struct *work)
 		return;
 	}
 }
-
-#if defined(CONFIG_OF)
-
-#include <linux/of_device.h>
-#include <linux/of_gpio.h>
-
-static const struct of_device_id sbs_dt_ids[] = {
-	{ .compatible = "sbs,sbs-battery" },
-	{ .compatible = "ti,bq20z75" },
-	{ }
-};
-MODULE_DEVICE_TABLE(of, sbs_dt_ids);
-
-static struct sbs_platform_data *sbs_of_populate_pdata(
-		struct i2c_client *client)
-{
-	struct device_node *of_node = client->dev.of_node;
-	struct sbs_platform_data *pdata = client->dev.platform_data;
-	enum of_gpio_flags gpio_flags;
-	int rc;
-	u32 prop;
-
-	/* verify this driver matches this device */
-	if (!of_node)
-		return NULL;
-
-	/* if platform data is set, honor it */
-	if (pdata)
-		return pdata;
-
-	/* first make sure at least one property is set, otherwise
-	 * it won't change behavior from running without pdata.
-	 */
-	if (!of_get_property(of_node, "sbs,i2c-retry-count", NULL) &&
-		!of_get_property(of_node, "sbs,poll-retry-count", NULL) &&
-		!of_get_property(of_node, "sbs,battery-detect-gpios", NULL))
-		goto of_out;
-
-	pdata = devm_kzalloc(&client->dev, sizeof(struct sbs_platform_data),
-				GFP_KERNEL);
-	if (!pdata)
-		goto of_out;
-
-	rc = of_property_read_u32(of_node, "sbs,i2c-retry-count", &prop);
-	if (!rc)
-		pdata->i2c_retry_count = prop;
-
-	rc = of_property_read_u32(of_node, "sbs,poll-retry-count", &prop);
-	if (!rc)
-		pdata->poll_retry_count = prop;
-
-	if (!of_get_property(of_node, "sbs,battery-detect-gpios", NULL)) {
-		pdata->battery_detect = -1;
-		goto of_out;
-	}
-
-	pdata->battery_detect = of_get_named_gpio_flags(of_node,
-			"sbs,battery-detect-gpios", 0, &gpio_flags);
-
-	if (gpio_flags & OF_GPIO_ACTIVE_LOW)
-		pdata->battery_detect_present = 0;
-	else
-		pdata->battery_detect_present = 1;
-
-of_out:
-	return pdata;
-}
-#else
-static struct sbs_platform_data *sbs_of_populate_pdata(
-	struct i2c_client *client)
-{
-	return client->dev.platform_data;
-}
-#endif
 
 static const struct power_supply_desc sbs_default_desc = {
 	.type = POWER_SUPPLY_TYPE_BATTERY,
@@ -823,26 +801,42 @@ static int sbs_probe(struct i2c_client *client,
 	if (!sbs_desc->name)
 		return -ENOMEM;
 
-	chip = kzalloc(sizeof(struct sbs_info), GFP_KERNEL);
+	chip = devm_kzalloc(&client->dev, sizeof(struct sbs_info), GFP_KERNEL);
 	if (!chip)
 		return -ENOMEM;
 
 	chip->client = client;
 	chip->enable_detection = false;
-	chip->gpio_detect = false;
 	psy_cfg.of_node = client->dev.of_node;
 	psy_cfg.drv_data = chip;
-	/* ignore first notification of external change, it is generated
-	 * from the power_supply_register call back
-	 */
-	chip->ignore_changes = 1;
 	chip->last_state = POWER_SUPPLY_STATUS_UNKNOWN;
+	mutex_init(&chip->mode_lock);
 
-	pdata = sbs_of_populate_pdata(client);
+	/* use pdata if available, fall back to DT properties,
+	 * or hardcoded defaults if not
+	 */
+	rc = of_property_read_u32(client->dev.of_node, "sbs,i2c-retry-count",
+				  &chip->i2c_retry_count);
+	if (rc)
+		chip->i2c_retry_count = 0;
+
+	rc = of_property_read_u32(client->dev.of_node, "sbs,poll-retry-count",
+				  &chip->poll_retry_count);
+	if (rc)
+		chip->poll_retry_count = 0;
 
 	if (pdata) {
-		chip->gpio_detect = gpio_is_valid(pdata->battery_detect);
-		chip->pdata = pdata;
+		chip->poll_retry_count = pdata->poll_retry_count;
+		chip->i2c_retry_count  = pdata->i2c_retry_count;
+	}
+	chip->i2c_retry_count = chip->i2c_retry_count + 1;
+
+	chip->gpio_detect = devm_gpiod_get_optional(&client->dev,
+			"sbs,battery-detect", GPIOD_IN);
+	if (IS_ERR(chip->gpio_detect)) {
+		dev_err(&client->dev, "Failed to get gpio: %ld\n",
+			PTR_ERR(chip->gpio_detect));
+		return PTR_ERR(chip->gpio_detect);
 	}
 
 	i2c_set_clientdata(client, chip);
@@ -850,47 +844,26 @@ static int sbs_probe(struct i2c_client *client,
 	if (!chip->gpio_detect)
 		goto skip_gpio;
 
-	rc = gpio_request(pdata->battery_detect, dev_name(&client->dev));
-	if (rc) {
-		dev_warn(&client->dev, "Failed to request gpio: %d\n", rc);
-		chip->gpio_detect = false;
-		goto skip_gpio;
-	}
-
-	rc = gpio_direction_input(pdata->battery_detect);
-	if (rc) {
-		dev_warn(&client->dev, "Failed to get gpio as input: %d\n", rc);
-		gpio_free(pdata->battery_detect);
-		chip->gpio_detect = false;
-		goto skip_gpio;
-	}
-
-	irq = gpio_to_irq(pdata->battery_detect);
+	irq = gpiod_to_irq(chip->gpio_detect);
 	if (irq <= 0) {
 		dev_warn(&client->dev, "Failed to get gpio as irq: %d\n", irq);
-		gpio_free(pdata->battery_detect);
-		chip->gpio_detect = false;
 		goto skip_gpio;
 	}
 
-	rc = request_irq(irq, sbs_irq,
-		IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
-		dev_name(&client->dev), chip->power_supply);
+	rc = devm_request_threaded_irq(&client->dev, irq, NULL, sbs_irq,
+		IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+		dev_name(&client->dev), chip);
 	if (rc) {
 		dev_warn(&client->dev, "Failed to request irq: %d\n", rc);
-		gpio_free(pdata->battery_detect);
-		chip->gpio_detect = false;
 		goto skip_gpio;
 	}
-
-	chip->irq = irq;
 
 skip_gpio:
 	/*
 	 * Before we register, we might need to make sure we can actually talk
 	 * to the battery.
 	 */
-	if (!force_load) {
+	if (!(force_load || chip->gpio_detect)) {
 		rc = sbs_read_word_data(client, sbs_data[REG_STATUS].addr);
 
 		if (rc < 0) {
@@ -900,7 +873,7 @@ skip_gpio:
 		}
 	}
 
-	chip->power_supply = power_supply_register(&client->dev, sbs_desc,
+	chip->power_supply = devm_power_supply_register(&client->dev, sbs_desc,
 						   &psy_cfg);
 	if (IS_ERR(chip->power_supply)) {
 		dev_err(&client->dev,
@@ -919,13 +892,6 @@ skip_gpio:
 	return 0;
 
 exit_psupply:
-	if (chip->irq)
-		free_irq(chip->irq, chip->power_supply);
-	if (chip->gpio_detect)
-		gpio_free(pdata->battery_detect);
-
-	kfree(chip);
-
 	return rc;
 }
 
@@ -933,17 +899,7 @@ static int sbs_remove(struct i2c_client *client)
 {
 	struct sbs_info *chip = i2c_get_clientdata(client);
 
-	if (chip->irq)
-		free_irq(chip->irq, chip->power_supply);
-	if (chip->gpio_detect)
-		gpio_free(chip->pdata->battery_detect);
-
-	power_supply_unregister(chip->power_supply);
-
 	cancel_delayed_work_sync(&chip->work);
-
-	kfree(chip);
-	chip = NULL;
 
 	return 0;
 }
@@ -954,16 +910,16 @@ static int sbs_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct sbs_info *chip = i2c_get_clientdata(client);
-	s32 ret;
 
 	if (chip->poll_time > 0)
 		cancel_delayed_work_sync(&chip->work);
 
-	/* write to manufacturer access with sleep command */
-	ret = sbs_write_word_data(client, sbs_data[REG_MANUFACTURER_DATA].addr,
+	/*
+	 * Write to manufacturer access with sleep command.
+	 * Support is manufacturer dependend, so ignore errors.
+	 */
+	sbs_write_word_data(client, sbs_data[REG_MANUFACTURER_DATA].addr,
 		MANUFACTURER_ACCESS_SLEEP);
-	if (chip->is_present && ret < 0)
-		return ret;
 
 	return 0;
 }
@@ -982,13 +938,21 @@ static const struct i2c_device_id sbs_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, sbs_id);
 
+static const struct of_device_id sbs_dt_ids[] = {
+	{ .compatible = "sbs,sbs-battery" },
+	{ .compatible = "ti,bq20z75" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, sbs_dt_ids);
+
 static struct i2c_driver sbs_battery_driver = {
 	.probe		= sbs_probe,
 	.remove		= sbs_remove,
+	.alert		= sbs_alert,
 	.id_table	= sbs_id,
 	.driver = {
 		.name	= "sbs-battery",
-		.of_match_table = of_match_ptr(sbs_dt_ids),
+		.of_match_table = sbs_dt_ids,
 		.pm	= SBS_PM_OPS,
 	},
 };
