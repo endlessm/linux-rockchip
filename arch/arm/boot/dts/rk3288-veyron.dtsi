@@ -54,9 +54,14 @@
 	status = "okay";
 };
 
-&vpu_service {
-	status = "okay";
-};
+/*
+ * vpu_service is racing with rockchip-vpu but the V4L slice allocator only
+ * needs rockchip-vpu.
+ *
+ * &vpu_service {
+ * 	status = "okay";
+ * };
+ */
 
 / {
 	memory {
