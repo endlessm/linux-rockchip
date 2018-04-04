@@ -170,14 +170,18 @@
 		status = "okay";
 	};
 
-	wireless-wlan {
-		compatible = "wlan-platdata";
-		rockchip,grf = <&grf>;
-		wifi_chip_type = "ap6354";
-		sdio_vref = <1800>;
-		WIFI,host_wake_irq = <&gpio4 30 GPIO_ACTIVE_HIGH>;
-		status = "okay";
-	};
+/*
+ * Disabled for SKUs shipping the AzureWave AW-CM389NF (Marvell 88W8897)
+ *
+ *	wireless-wlan {
+ *		compatible = "wlan-platdata";
+ *		rockchip,grf = <&grf>;
+ *		wifi_chip_type = "ap6354";
+ *		sdio_vref = <1800>;
+ *		WIFI,host_wake_irq = <&gpio4 30 GPIO_ACTIVE_HIGH>;
+ *		status = "okay";
+ *	};
+ */
 
 };
 
