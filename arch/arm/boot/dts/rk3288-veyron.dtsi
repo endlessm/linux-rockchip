@@ -157,18 +157,21 @@
 		regulator-boot-on;
 		vin-supply = <&vcc_5v>;
 	};
-
-    wireless-bluetooth {
-		compatible = "bluetooth-platdata";
-		uart_rts_gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
-		pinctrl-names = "default", "rts_gpio";
-		pinctrl-0 = <&uart0_rts>;
-		pinctrl-1 = <&uart0_gpios>;
-		BT,reset_gpio    = <&gpio4 29 GPIO_ACTIVE_HIGH>;
-		BT,wake_gpio     = <&gpio4 26 GPIO_ACTIVE_HIGH>;
-		BT,wake_host_irq = <&gpio4 31 GPIO_ACTIVE_HIGH>;
-		status = "okay";
-	};
+/*
+ * Disabled for SKUs shipping the AzureWave AW-CM389NF (Marvell 88W8897)
+ *
+ *    wireless-bluetooth {
+ *		compatible = "bluetooth-platdata";
+ *		uart_rts_gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
+ *		pinctrl-names = "default", "rts_gpio";
+ *		pinctrl-0 = <&uart0_rts>;
+ *		pinctrl-1 = <&uart0_gpios>;
+ *		BT,reset_gpio    = <&gpio4 29 GPIO_ACTIVE_HIGH>;
+ *		BT,wake_gpio     = <&gpio4 26 GPIO_ACTIVE_HIGH>;
+ *		BT,wake_host_irq = <&gpio4 31 GPIO_ACTIVE_HIGH>;
+ *		status = "okay";
+ *	};
+ */
 
 /*
  * Disabled for SKUs shipping the AzureWave AW-CM389NF (Marvell 88W8897)
