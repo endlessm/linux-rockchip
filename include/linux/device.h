@@ -277,7 +277,7 @@ struct device_driver {
 	const struct attribute_group **groups;
 
 	const struct dev_pm_ops *pm;
-	int (*coredump) (struct device *dev);
+	void (*coredump) (struct device *dev);
 
 	struct driver_private *p;
 };
