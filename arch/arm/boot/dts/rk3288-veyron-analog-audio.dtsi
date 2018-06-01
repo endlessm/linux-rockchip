@@ -32,7 +32,7 @@
 		clock-names = "mclk";
 		clocks = <&cru SCLK_I2S0_OUT>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&int_codec>;
+		pinctrl-0 = <&int_codec>, <&i2s0_mclk>;
 	};
 };
 
