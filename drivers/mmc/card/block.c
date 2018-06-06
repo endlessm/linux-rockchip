@@ -2841,6 +2841,34 @@ static const struct mmc_fixup blk_fixups[] =
 	END_FIXUP
 };
 
+#define mmc_get_drvdata(c)      dev_get_drvdata(&(c)->dev)
+extern int emmc_mfgdata_parse(struct mmc_card *card, unsigned long capacity);
+static void endless_mfgdata_setup(struct mmc_card *card)
+{
+	struct mmc_blk_data *main_md = mmc_get_drvdata(card);
+	struct mmc_blk_data *part_md;
+
+	list_for_each_entry(part_md, &main_md->part, part)
+		if (part_md->part_type == EXT_CSD_PART_CONFIG_ACC_BOOT0)
+			break;
+
+	if (part_md->part_type != EXT_CSD_PART_CONFIG_ACC_BOOT0) {
+		pr_info("mfgdata: no boot0 partition found\n");
+		return;
+	}
+
+	mmc_claim_host(card->host);
+
+	if (mmc_blk_part_switch(card, part_md)) {
+		pr_info("mfgdata: failed switch to boot partition\n");
+		mmc_release_host(card->host);
+		return;
+	}
+
+	emmc_mfgdata_parse(card, get_capacity(part_md->disk) << 9);
+	mmc_release_host(card->host);
+}
+
 extern struct mmc_card *this_card;
 static int mmc_blk_probe(struct mmc_card *card)
 {
@@ -2881,6 +2909,9 @@ static int mmc_blk_probe(struct mmc_card *card)
 
 	if (mmc_add_disk(md))
 		goto out;
+
+	if (card->host->restrict_caps & RESTRICT_CARD_TYPE_EMMC)
+		endless_mfgdata_setup(card);
 
 	list_for_each_entry(part_md, &md->part, part) {
 		if (mmc_add_disk(part_md))
