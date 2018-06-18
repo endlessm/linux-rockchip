@@ -135,6 +135,9 @@
 		regulator-max-microvolt = <1350000>;
 		regulator-name = "vdd_logic";
 		regulator-ramp-delay = <4000>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-on-in-suspend;
 	};
 
 	vcc_5v: vcc-5v {
