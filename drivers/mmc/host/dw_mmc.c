@@ -41,6 +41,7 @@
 #include <linux/mmc/slot-gpio.h>
 
 #include "dw_mmc.h"
+#undef CONFIG_DEBUG_FS
 
 /* Common flag combinations */
 #define DW_MCI_DATA_ERROR_FLAGS	(SDMMC_INT_DRTO | SDMMC_INT_DCRC | \
@@ -930,7 +931,7 @@ static int dw_mci_pre_dma_transfer(struct dw_mci *host,
 }
 
 static void dw_mci_pre_req(struct mmc_host *mmc,
-			   struct mmc_request *mrq)
+			   struct mmc_request *mrq, bool is_first_req)
 {
 	struct dw_mci_slot *slot = mmc_priv(mmc);
 	struct mmc_data *data = mrq->data;
@@ -2993,9 +2994,9 @@ no_dma:
 	host->use_dma = TRANS_MODE_PIO;
 }
 
-static void dw_mci_cmd11_timer(struct timer_list *t)
+static void dw_mci_cmd11_timer(unsigned long arg)
 {
-	struct dw_mci *host = from_timer(host, t, cmd11_timer);
+	struct dw_mci *host = (struct dw_mci *)arg;
 
 	if (host->state != STATE_SENDING_CMD11) {
 		dev_warn(host->dev, "Unexpected CMD11 timeout\n");
@@ -3007,9 +3008,9 @@ static void dw_mci_cmd11_timer(struct timer_list *t)
 	tasklet_schedule(&host->tasklet);
 }
 
-static void dw_mci_cto_timer(struct timer_list *t)
+static void dw_mci_cto_timer(unsigned long arg)
 {
-	struct dw_mci *host = from_timer(host, t, cto_timer);
+	struct dw_mci *host = (struct dw_mci *)arg;
 	unsigned long irqflags;
 	u32 pending;
 
@@ -3062,9 +3063,9 @@ exit:
 	spin_unlock_irqrestore(&host->irq_lock, irqflags);
 }
 
-static void dw_mci_dto_timer(struct timer_list *t)
+static void dw_mci_dto_timer(unsigned long arg)
 {
-	struct dw_mci *host = from_timer(host, t, dto_timer);
+	struct dw_mci *host = (struct dw_mci *)arg;
 	unsigned long irqflags;
 	u32 pending;
 
@@ -3127,7 +3128,7 @@ static struct dw_mci_board *dw_mci_parse_dt(struct dw_mci *host)
 		return ERR_PTR(-ENOMEM);
 
 	/* find reset controller when exist */
-	pdata->rstc = devm_reset_control_get_optional_exclusive(dev, "reset");
+	pdata->rstc = devm_reset_control_get_optional(dev, "reset");
 	if (IS_ERR(pdata->rstc)) {
 		if (PTR_ERR(pdata->rstc) == -EPROBE_DEFER)
 			return ERR_PTR(-EPROBE_DEFER);
@@ -3255,9 +3256,9 @@ int dw_mci_probe(struct dw_mci *host)
 		}
 	}
 
-	timer_setup(&host->cmd11_timer, dw_mci_cmd11_timer, 0);
-	timer_setup(&host->cto_timer, dw_mci_cto_timer, 0);
-	timer_setup(&host->dto_timer, dw_mci_dto_timer, 0);
+	setup_timer(&host->cmd11_timer, dw_mci_cmd11_timer, (unsigned long) host);
+	setup_timer(&host->cto_timer, dw_mci_cto_timer, (unsigned long) host);
+	setup_timer(&host->dto_timer, dw_mci_dto_timer, (unsigned long) host);
 
 	spin_lock_init(&host->lock);
 	spin_lock_init(&host->irq_lock);
