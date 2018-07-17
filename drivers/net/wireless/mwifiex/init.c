@@ -52,9 +52,9 @@ static int mwifiex_add_bss_prio_tbl(struct mwifiex_private *priv)
 	return 0;
 }
 
-static void wakeup_timer_fn(struct timer_list *t)
+static void wakeup_timer_fn(unsigned long data)
 {
-	struct mwifiex_adapter *adapter = from_timer(adapter, t, wakeup_timer);
+	struct mwifiex_adapter *adapter = (struct mwifiex_adapter *)data;
 
 	mwifiex_dbg(adapter, ERROR, "Firmware wakeup failed\n");
 	adapter->hw_status = MWIFIEX_HW_STATUS_RESET;
@@ -320,7 +320,8 @@ static void mwifiex_init_adapter(struct mwifiex_adapter *adapter)
 	adapter->iface_limit.uap_intf = MWIFIEX_MAX_UAP_NUM;
 	adapter->iface_limit.p2p_intf = MWIFIEX_MAX_P2P_NUM;
 	adapter->active_scan_triggered = false;
-	timer_setup(&adapter->wakeup_timer, wakeup_timer_fn, 0);
+	setup_timer(&adapter->wakeup_timer, wakeup_timer_fn,
+		    (unsigned long)adapter);
 	adapter->devdump_len = 0;
 	timer_setup(&adapter->devdump_timer, fw_dump_timer_fn, 0);
 }

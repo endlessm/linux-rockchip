@@ -312,10 +312,10 @@ mwifiex_11n_find_last_seq_num(struct reorder_tmr_cnxt *ctx)
  * them and then dumps the Rx reordering table.
  */
 static void
-mwifiex_flush_data(struct timer_list *t)
+mwifiex_flush_data(unsigned long context)
 {
 	struct reorder_tmr_cnxt *ctx =
-		from_timer(ctx, t, timer);
+		(struct reorder_tmr_cnxt *) context;
 	int start_win, seq_num;
 
 	ctx->timer_is_set = false;
@@ -412,7 +412,8 @@ mwifiex_11n_create_rx_reorder_tbl(struct mwifiex_private *priv, u8 *ta,
 	new_node->timer_context.priv = priv;
 	new_node->timer_context.timer_is_set = false;
 
-	timer_setup(&new_node->timer_context.timer, mwifiex_flush_data, 0);
+	setup_timer(&new_node->timer_context.timer, mwifiex_flush_data,
+		    (unsigned long)&new_node->timer_context);
 
 	for (i = 0; i < win_size; ++i)
 		new_node->rx_reorder_ptr[i] = NULL;
