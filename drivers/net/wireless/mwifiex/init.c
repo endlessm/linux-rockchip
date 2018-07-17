@@ -64,9 +64,9 @@ static void wakeup_timer_fn(unsigned long data)
 		adapter->if_ops.card_reset(adapter);
 }
 
-static void fw_dump_timer_fn(struct timer_list *t)
+static void fw_dump_timer_fn(unsigned long data)
 {
-	struct mwifiex_adapter *adapter = from_timer(adapter, t, devdump_timer);
+	struct mwifiex_adapter *adapter = (struct mwifiex_adapter *)data;
 
 	mwifiex_upload_device_dump(adapter);
 }
@@ -323,7 +323,8 @@ static void mwifiex_init_adapter(struct mwifiex_adapter *adapter)
 	setup_timer(&adapter->wakeup_timer, wakeup_timer_fn,
 		    (unsigned long)adapter);
 	adapter->devdump_len = 0;
-	timer_setup(&adapter->devdump_timer, fw_dump_timer_fn, 0);
+	setup_timer(&adapter->devdump_timer, fw_dump_timer_fn,
+		    (unsigned long)adapter);
 }
 
 /*
