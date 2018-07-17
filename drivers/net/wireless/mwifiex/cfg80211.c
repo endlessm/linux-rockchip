@@ -937,7 +937,7 @@ mwifiex_init_new_priv_params(struct mwifiex_private *priv,
 static int
 mwifiex_change_vif_to_p2p(struct net_device *dev,
 			  enum nl80211_iftype curr_iftype,
-			  enum nl80211_iftype type,
+			  enum nl80211_iftype type, u32 *flags,
 			  struct vif_params *params)
 {
 	struct mwifiex_private *priv;
@@ -1009,7 +1009,7 @@ mwifiex_change_vif_to_p2p(struct net_device *dev,
 static int
 mwifiex_change_vif_to_sta_adhoc(struct net_device *dev,
 				enum nl80211_iftype curr_iftype,
-				enum nl80211_iftype type,
+				enum nl80211_iftype type, u32 *flags,
 				struct vif_params *params)
 {
 	struct mwifiex_private *priv;
@@ -1068,7 +1068,7 @@ mwifiex_change_vif_to_sta_adhoc(struct net_device *dev,
 static int
 mwifiex_change_vif_to_ap(struct net_device *dev,
 			 enum nl80211_iftype curr_iftype,
-			 enum nl80211_iftype type,
+			 enum nl80211_iftype type, u32 *flags,
 			 struct vif_params *params)
 {
 	struct mwifiex_private *priv;
@@ -1124,7 +1124,7 @@ mwifiex_change_vif_to_ap(struct net_device *dev,
 static int
 mwifiex_cfg80211_change_virtual_intf(struct wiphy *wiphy,
 				     struct net_device *dev,
-				     enum nl80211_iftype type,
+				     enum nl80211_iftype type, u32 *flags,
 				     struct vif_params *params)
 {
 	struct mwifiex_private *priv = mwifiex_netdev_get_priv(dev);
@@ -1151,10 +1151,10 @@ mwifiex_cfg80211_change_virtual_intf(struct wiphy *wiphy,
 		case NL80211_IFTYPE_P2P_CLIENT:
 		case NL80211_IFTYPE_P2P_GO:
 			return mwifiex_change_vif_to_p2p(dev, curr_iftype,
-							 type, params);
+							 type, flags, params);
 		case NL80211_IFTYPE_AP:
 			return mwifiex_change_vif_to_ap(dev, curr_iftype, type,
-							params);
+							flags, params);
 		case NL80211_IFTYPE_UNSPECIFIED:
 			mwifiex_dbg(priv->adapter, INFO,
 				    "%s: kept type as IBSS\n", dev->name);
@@ -1182,10 +1182,10 @@ mwifiex_cfg80211_change_virtual_intf(struct wiphy *wiphy,
 		case NL80211_IFTYPE_P2P_CLIENT:
 		case NL80211_IFTYPE_P2P_GO:
 			return mwifiex_change_vif_to_p2p(dev, curr_iftype,
-							 type, params);
+							 type, flags, params);
 		case NL80211_IFTYPE_AP:
 			return mwifiex_change_vif_to_ap(dev, curr_iftype, type,
-							params);
+							flags, params);
 		case NL80211_IFTYPE_UNSPECIFIED:
 			mwifiex_dbg(priv->adapter, INFO,
 				    "%s: kept type as STA\n", dev->name);
@@ -1203,12 +1203,12 @@ mwifiex_cfg80211_change_virtual_intf(struct wiphy *wiphy,
 		switch (type) {
 		case NL80211_IFTYPE_ADHOC:
 			return mwifiex_change_vif_to_sta_adhoc(dev, curr_iftype,
-							       type, params);
+							       type, flags, params);
 			break;
 		case NL80211_IFTYPE_P2P_CLIENT:
 		case NL80211_IFTYPE_P2P_GO:
 			return mwifiex_change_vif_to_p2p(dev, curr_iftype,
-							 type, params);
+							 type, flags, params);
 		case NL80211_IFTYPE_UNSPECIFIED:
 			mwifiex_dbg(priv->adapter, INFO,
 				    "%s: kept type as AP\n", dev->name);
@@ -1242,13 +1242,13 @@ mwifiex_cfg80211_change_virtual_intf(struct wiphy *wiphy,
 			if (mwifiex_cfg80211_deinit_p2p(priv))
 				return -EFAULT;
 			return mwifiex_change_vif_to_sta_adhoc(dev, curr_iftype,
-							       type, params);
+							       type, flags, params);
 			break;
 		case NL80211_IFTYPE_AP:
 			if (mwifiex_cfg80211_deinit_p2p(priv))
 				return -EFAULT;
 			return mwifiex_change_vif_to_ap(dev, curr_iftype, type,
-							params);
+							flags, params);
 		case NL80211_IFTYPE_UNSPECIFIED:
 			mwifiex_dbg(priv->adapter, INFO,
 				    "%s: kept type as P2P\n", dev->name);
@@ -2851,6 +2851,7 @@ struct wireless_dev *mwifiex_add_virtual_intf(struct wiphy *wiphy,
 					      const char *name,
 					      unsigned char name_assign_type,
 					      enum nl80211_iftype type,
+					      u32 *flags,
 					      struct vif_params *params)
 {
 	struct mwifiex_adapter *adapter = mwifiex_cfg80211_get_adapter(wiphy);
