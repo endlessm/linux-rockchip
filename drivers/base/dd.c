@@ -219,6 +219,18 @@ static void driver_bound(struct device *dev)
 					     BUS_NOTIFY_BOUND_DRIVER, dev);
 }
 
+static ssize_t coredump_store(struct device *dev, struct device_attribute *attr,
+			    const char *buf, size_t count)
+{
+	device_lock(dev);
+	if (dev->driver->coredump)
+		dev->driver->coredump(dev);
+	device_unlock(dev);
+
+	return count;
+}
+static DEVICE_ATTR_WO(coredump);
+
 static int driver_sysfs_add(struct device *dev)
 {
 	int ret;
@@ -228,14 +240,26 @@ static int driver_sysfs_add(struct device *dev)
 					     BUS_NOTIFY_BIND_DRIVER, dev);
 
 	ret = sysfs_create_link(&dev->driver->p->kobj, &dev->kobj,
+				kobject_name(&dev->kobj));
+	if (ret)
+		goto fail;
+
+	ret = sysfs_create_link(&dev->kobj, &dev->driver->p->kobj,
+				"driver");
+	if (ret)
+		goto rm_dev;
+
+	if (!IS_ENABLED(CONFIG_DEV_COREDUMP) || !dev->driver->coredump ||
+	    !device_create_file(dev, &dev_attr_coredump))
+		return 0;
+
+	sysfs_remove_link(&dev->kobj, "driver");
+
+rm_dev:
+	sysfs_remove_link(&dev->driver->p->kobj,
 			  kobject_name(&dev->kobj));
-	if (ret == 0) {
-		ret = sysfs_create_link(&dev->kobj, &dev->driver->p->kobj,
-					"driver");
-		if (ret)
-			sysfs_remove_link(&dev->driver->p->kobj,
-					kobject_name(&dev->kobj));
-	}
+
+fail:
 	return ret;
 }
 
@@ -244,6 +268,8 @@ static void driver_sysfs_remove(struct device *dev)
 	struct device_driver *drv = dev->driver;
 
 	if (drv) {
+		if (drv->coredump)
+			device_remove_file(dev, &dev_attr_coredump);
 		sysfs_remove_link(&drv->p->kobj, kobject_name(&dev->kobj));
 		sysfs_remove_link(&dev->kobj, "driver");
 	}

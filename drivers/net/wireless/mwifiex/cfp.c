@@ -66,8 +66,8 @@ static u8 supported_rates_bg[BG_SUPPORTED_RATES] = { 0x02, 0x04, 0x0b, 0x0c,
 					0x12, 0x16, 0x18, 0x24, 0x30, 0x48,
 					0x60, 0x6c, 0 };
 
-u16 region_code_index[MWIFIEX_MAX_REGION_CODE] = { 0x10, 0x20, 0x30,
-						0x32, 0x40, 0x41, 0xff };
+u16 region_code_index[MWIFIEX_MAX_REGION_CODE] = { 0x00, 0x10, 0x20, 0x30,
+						0x31, 0x32, 0x40, 0x41, 0x50 };
 
 static u8 supported_rates_n[N_SUPPORTED_RATES] = { 0x02, 0x04, 0 };
 
@@ -168,7 +168,7 @@ struct region_code_mapping {
 static struct region_code_mapping region_code_mapping_t[] = {
 	{ 0x10, "US " }, /* US FCC */
 	{ 0x20, "CA " }, /* IC Canada */
-	{ 0x30, "EU " }, /* ETSI */
+	{ 0x30, "FR " }, /* France */
 	{ 0x31, "ES " }, /* Spain */
 	{ 0x32, "FR " }, /* France */
 	{ 0x40, "JP " }, /* Japan */
@@ -180,11 +180,9 @@ static struct region_code_mapping region_code_mapping_t[] = {
 u8 *mwifiex_11d_code_2_region(u8 code)
 {
 	u8 i;
-	u8 size = sizeof(region_code_mapping_t)/
-				sizeof(struct region_code_mapping);
 
 	/* Look for code in mapping table */
-	for (i = 0; i < size; i++)
+	for (i = 0; i < ARRAY_SIZE(region_code_mapping_t); i++)
 		if (region_code_mapping_t[i].code == code)
 			return region_code_mapping_t[i].region;
 
@@ -350,7 +348,7 @@ mwifiex_get_cfp(struct mwifiex_private *priv, u8 band, u16 channel, u32 freq)
 		}
 	}
 	if (i == sband->n_channels) {
-		mwifiex_dbg(priv->adapter, ERROR,
+		mwifiex_dbg(priv->adapter, WARN,
 			    "%s: cannot find cfp by band %d\t"
 			    "& channel=%d freq=%d\n",
 			    __func__, band, channel, freq);
