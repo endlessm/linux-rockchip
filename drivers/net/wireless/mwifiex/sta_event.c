@@ -851,7 +851,7 @@ int mwifiex_process_sta_event(struct mwifiex_private *priv)
 
 	case EVENT_BG_SCAN_STOPPED:
 		dev_dbg(adapter->dev, "event: BGS_STOPPED\n");
-		cfg80211_sched_scan_stopped(priv->wdev.wiphy, 0);
+		cfg80211_sched_scan_stopped(priv->wdev.wiphy);
 		if (priv->sched_scanning)
 			priv->sched_scanning = false;
 		break;

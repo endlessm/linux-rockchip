@@ -518,7 +518,7 @@ int mwifiex_enable_hs(struct mwifiex_adapter *adapter)
 #endif
 			mwifiex_dbg(adapter, CMD, "aborting bgscan!\n");
 			mwifiex_stop_bg_scan(priv);
-			cfg80211_sched_scan_stopped(priv->wdev.wiphy, 0);
+			cfg80211_sched_scan_stopped(priv->wdev.wiphy);
 #ifdef CONFIG_PM
 		}
 #endif
