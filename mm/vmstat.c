@@ -994,6 +994,7 @@ const char * const vmstat_text[] = {
 
 	"workingset_refault",
 	"workingset_activate",
+	"workingset_restore",
 	"workingset_nodereclaim",
 
 	/* enum writeback_stat_item counters */
