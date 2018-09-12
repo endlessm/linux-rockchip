@@ -23,6 +23,8 @@
 #include <linux/of_device.h>
 #include <linux/spinlock.h>
 
+#include <linux/hdmi-notifier.h>
+
 #include <media/cec-notifier.h>
 
 #include <drm/drm_of.h>
@@ -338,6 +340,12 @@ static void repo_hpd_event(struct work_struct *p_work)
 	else
 		switch_set_state(&hdmi->switchdev, 0);
 #endif
+
+	if (hdmi->hpd_state)
+		hdmi_event_connect(hdmi->dev);
+	else
+		hdmi_event_disconnect(hdmi->dev);
+
 }
 
 static bool check_hdmi_irq(struct dw_hdmi *hdmi, int intr_stat,
