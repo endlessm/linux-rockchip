@@ -321,7 +321,7 @@ include scripts/Kbuild.include
 # Make variables (CC, etc...)
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
-CC		= $(CROSS_COMPILE)gcc
+CC		= $(CROSS_COMPILE)gcc$(COMPILER_VERSION)
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
@@ -339,7 +339,7 @@ CHECK		= sparse
 # Use the wrapper for the compiler. This wrapper scans for new
 # warnings and causes the build to stop upon encountering them.
 ifneq ($(wildcard $(srctree)/scripts/gcc-wrapper.py),)
-CC		= $(srctree)/scripts/gcc-wrapper.py $(CROSS_COMPILE)gcc
+CC		= $(srctree)/scripts/gcc-wrapper.py $(CROSS_COMPILE)gcc$(COMPILER_VERSION)
 endif
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
