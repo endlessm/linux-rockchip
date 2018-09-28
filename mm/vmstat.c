@@ -659,7 +659,7 @@ static int refresh_cpu_vm_stats(bool do_pagesets)
 	struct zone *zone;
 	int i;
 	int global_zone_diff[NR_VM_ZONE_STAT_ITEMS] = { 0, };
-	int global_node_diff[NR_VM_NODE_STAT_ITEMS] = { 0, };
+	int global_node_diff[NR_VM_NODE_STAT_ITEMS];
 	int changes = 0;
 
 	for_each_populated_zone(zone) {
@@ -741,7 +741,7 @@ void cpu_vm_stats_fold(int cpu)
 	struct zone *zone;
 	int i;
 	int global_zone_diff[NR_VM_ZONE_STAT_ITEMS] = { 0, };
-	int global_node_diff[NR_VM_NODE_STAT_ITEMS] = { 0, };
+	int global_node_diff[NR_VM_NODE_STAT_ITEMS];
 
 	for_each_populated_zone(zone) {
 		struct per_cpu_pageset *p;
