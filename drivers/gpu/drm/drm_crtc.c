@@ -5451,6 +5451,71 @@ int drm_mode_crtc_set_gamma_size(struct drm_crtc *crtc,
 }
 EXPORT_SYMBOL(drm_mode_crtc_set_gamma_size);
 
+static int upsampling_gamma (struct drm_mode_crtc_lut *crtc_lut,
+			     struct drm_crtc *crtc)
+{
+	uint16_t *r_base_lut, *g_base_lut, *b_base_lut;
+	uint16_t *r_base, *g_base, *b_base;
+	uint16_t *lut, value;
+	int gamma_slots, size_lut;
+	int ret = 0;
+	int i, j;
+
+	lut = kcalloc(crtc_lut->gamma_size, sizeof(uint16_t) * 3, GFP_KERNEL);
+	if (!lut)
+		return -ENOMEM;
+
+	size_lut = crtc_lut->gamma_size * (sizeof(uint16_t));
+
+	r_base_lut = lut;
+	if (copy_from_user(r_base_lut, (void __user *)(unsigned long) crtc_lut->red, size_lut)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	g_base_lut = r_base_lut + crtc_lut->gamma_size;
+	if (copy_from_user(g_base_lut, (void __user *)(unsigned long) crtc_lut->green, size_lut)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	b_base_lut = g_base_lut + crtc_lut->gamma_size;
+	if (copy_from_user(b_base_lut, (void __user *)(unsigned long) crtc_lut->blue, size_lut)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	gamma_slots = crtc->gamma_size / crtc_lut->gamma_size;
+
+	r_base = crtc->gamma_store;
+	for (i = 0; i < crtc_lut->gamma_size; i++) {
+		value = r_base_lut[i];
+
+		for (j = 0; j < gamma_slots; j++)
+			r_base[i * gamma_slots + j] = value;
+	}
+
+	g_base = r_base + crtc->gamma_size;
+	for (i = 0; i < crtc_lut->gamma_size; i++) {
+		value = g_base_lut[i];
+
+		for (j = 0; j < gamma_slots; j++)
+			g_base[i * gamma_slots + j] = value;
+	}
+
+	b_base = g_base + crtc->gamma_size;
+	for (i = 0; i < crtc_lut->gamma_size; i++) {
+		value = b_base_lut[i];
+
+		for (j = 0; j < gamma_slots; j++)
+			b_base[i * gamma_slots + j] = value;
+	}
+
+out:
+	kfree (lut);
+	return ret;
+}
+
 /**
  * drm_mode_gamma_set_ioctl - set the gamma table
  * @dev: DRM device
@@ -5489,29 +5554,16 @@ int drm_mode_gamma_set_ioctl(struct drm_device *dev,
 		goto out;
 	}
 
-	/* memcpy into gamma store */
-	if (crtc_lut->gamma_size != crtc->gamma_size) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	size = crtc_lut->gamma_size * (sizeof(uint16_t));
+	size = crtc->gamma_size * (sizeof(uint16_t));
 	r_base = crtc->gamma_store;
-	if (copy_from_user(r_base, (void __user *)(unsigned long)crtc_lut->red, size)) {
-		ret = -EFAULT;
-		goto out;
-	}
-
 	g_base = r_base + size;
-	if (copy_from_user(g_base, (void __user *)(unsigned long)crtc_lut->green, size)) {
-		ret = -EFAULT;
-		goto out;
-	}
-
 	b_base = g_base + size;
-	if (copy_from_user(b_base, (void __user *)(unsigned long)crtc_lut->blue, size)) {
-		ret = -EFAULT;
-		goto out;
+
+	/* memcpy into gamma store */
+	if (crtc_lut->gamma_size <= crtc->gamma_size) {
+		ret = upsampling_gamma (crtc_lut, crtc);
+		if (ret)
+			goto out;
 	}
 
 	crtc->funcs->gamma_set(crtc, r_base, g_base, b_base, 0, crtc->gamma_size);
