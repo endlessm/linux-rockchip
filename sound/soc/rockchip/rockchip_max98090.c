@@ -27,11 +27,18 @@
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
+#include <sound/hdmi-codec.h>
+#include <linux/hdmi-notifier.h>
 
 #include "rockchip_i2s.h"
 #include "../codecs/ts3a227e.h"
 
 #define DRV_NAME "rockchip-snd-max98090"
+
+enum {
+	DAI_LINK_HIFI,
+	DAI_LINK_HDMI,
+};
 
 static struct snd_soc_jack headset_jack;
 
@@ -48,11 +55,19 @@ static struct snd_soc_jack_pin headset_jack_pins[] = {
 
 };
 
+static struct snd_soc_jack_pin hdmi_jack_pin[] = {
+	{
+		.pin = "HDMI",
+		.mask = SND_JACK_LINEOUT,
+	},
+};
+
 static const struct snd_soc_dapm_widget rk_dapm_widgets[] = {
 	SND_SOC_DAPM_HP("Headphone", NULL),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
 	SND_SOC_DAPM_MIC("Int Mic", NULL),
 	SND_SOC_DAPM_SPK("Speaker", NULL),
+	SND_SOC_DAPM_LINE("HDMI", NULL),
 };
 
 static const struct snd_soc_dapm_route rk_audio_map[] = {
@@ -71,6 +86,7 @@ static const struct snd_kcontrol_new rk_mc_controls[] = {
 	SOC_DAPM_PIN_SWITCH("Headset Mic"),
 	SOC_DAPM_PIN_SWITCH("Int Mic"),
 	SOC_DAPM_PIN_SWITCH("Speaker"),
+	SOC_DAPM_PIN_SWITCH("HDMI"),
 };
 
 static int rk_aif1_hw_params(struct snd_pcm_substream *substream,
@@ -113,6 +129,26 @@ static int rk_aif1_hw_params(struct snd_pcm_substream *substream,
 	return ret;
 }
 
+static struct snd_soc_jack hdmi_card_jack;
+
+static int hdmi_rk_init(struct snd_soc_pcm_runtime *runtime)
+{
+	struct snd_soc_card *card = runtime->card;
+	struct snd_soc_codec *codec = runtime->codec;
+	int ret;
+
+	/* enable jack detection */
+	ret = snd_soc_card_jack_new(card, "HDMI", SND_JACK_LINEOUT,
+				    &hdmi_card_jack, hdmi_jack_pin,
+				    ARRAY_SIZE(hdmi_jack_pin));
+	if (ret) {
+		dev_err(card->dev, "Can't create HDMI Jack %d\n", ret);
+		return ret;
+	}
+
+	return hdmi_codec_set_jack_detect(codec, &hdmi_card_jack);
+}
+
 static int rk_init(struct snd_soc_pcm_runtime *runtime)
 {
 	/* Enable Headset and 4 Buttons Jack detection */
@@ -139,22 +175,32 @@ static struct snd_soc_aux_dev rk_98090_headset_dev = {
 	.init = rk_98090_headset_init,
 };
 
-static struct snd_soc_dai_link rk_dailink = {
-	.name = "max98090",
-	.stream_name = "Audio",
-	.codec_dai_name = "HiFi",
-	.init = rk_init,
-	.ops = &rk_aif1_ops,
-	/* set max98090 as slave */
-	.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
-		SND_SOC_DAIFMT_CBS_CFS,
+static struct snd_soc_dai_link rk_dailinks[] = {
+	[DAI_LINK_HIFI] = {
+		.name = "max98090",
+		.stream_name = "Audio",
+		.codec_dai_name = "HiFi",
+		.init = rk_init,
+		.ops = &rk_aif1_ops,
+		/* set max98090 as slave */
+		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_CBS_CFS,
+	},
+	[DAI_LINK_HDMI] = {
+		.name = "hdmi-audio-codec.5.auto",
+		.stream_name = "Playback",
+		.codec_dai_name = "i2s-hifi",
+		.init = hdmi_rk_init,
+		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_CBS_CFS,
+	},
 };
 
 static struct snd_soc_card snd_soc_card_rk = {
 	.name = "ROCKCHIP-I2S",
 	.owner = THIS_MODULE,
-	.dai_link = &rk_dailink,
-	.num_links = 1,
+	.dai_link = rk_dailinks,
+	.num_links = ARRAY_SIZE(rk_dailinks),
 	.aux_dev = &rk_98090_headset_dev,
 	.num_aux_devs = 1,
 	.dapm_widgets = rk_dapm_widgets,
@@ -174,23 +220,34 @@ static int snd_rk_mc_probe(struct platform_device *pdev)
 	/* register the soc card */
 	card->dev = &pdev->dev;
 
-	rk_dailink.codec_of_node = of_parse_phandle(np,
+	rk_dailinks[DAI_LINK_HIFI].codec_of_node = of_parse_phandle(np,
 			"rockchip,audio-codec", 0);
-	if (!rk_dailink.codec_of_node) {
+	if (!rk_dailinks[DAI_LINK_HIFI].codec_of_node) {
 		dev_err(&pdev->dev,
 			"Property 'rockchip,audio-codec' missing or invalid\n");
 		return -EINVAL;
 	}
 
-	rk_dailink.cpu_of_node = of_parse_phandle(np,
+	rk_dailinks[DAI_LINK_HDMI].codec_of_node = of_parse_phandle(np,
+			"rockchip,audio-codec", 1);
+	if (!rk_dailinks[DAI_LINK_HDMI].codec_of_node) {
+		dev_err(&pdev->dev,
+			"Property 'rockchip,audio-codec' missing or invalid\n");
+		return -EINVAL;
+	}
+
+	rk_dailinks[DAI_LINK_HIFI].cpu_of_node = of_parse_phandle(np,
 			"rockchip,i2s-controller", 0);
-	if (!rk_dailink.cpu_of_node) {
+	if (!rk_dailinks[DAI_LINK_HIFI].cpu_of_node) {
 		dev_err(&pdev->dev,
 			"Property 'rockchip,i2s-controller' missing or invalid\n");
 		return -EINVAL;
 	}
 
-	rk_dailink.platform_of_node = rk_dailink.cpu_of_node;
+	rk_dailinks[DAI_LINK_HIFI].platform_of_node = rk_dailinks[DAI_LINK_HIFI].cpu_of_node;
+
+	rk_dailinks[DAI_LINK_HDMI].cpu_of_node = rk_dailinks[DAI_LINK_HIFI].cpu_of_node;
+	rk_dailinks[DAI_LINK_HDMI].platform_of_node = rk_dailinks[DAI_LINK_HIFI].cpu_of_node;
 
 	rk_98090_headset_dev.codec_of_node = of_parse_phandle(np,
 			"rockchip,headset-codec", 0);

@@ -16,7 +16,7 @@
 		pinctrl-0 = <&mic_det>, <&hp_det>;
 		rockchip,model = "VEYRON-I2S";
 		rockchip,i2s-controller = <&i2s>;
-		rockchip,audio-codec = <&max98090>;
+		rockchip,audio-codec = <&max98090>, <&hdmi>;
 		rockchip,hp-det-gpios = <&gpio6 5 GPIO_ACTIVE_HIGH>;
 		rockchip,mic-det-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
 		rockchip,headset-codec = <&headsetcodec>;
