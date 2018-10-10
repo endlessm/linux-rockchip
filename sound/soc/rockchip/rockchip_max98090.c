@@ -30,6 +30,8 @@
 #include <sound/hdmi-codec.h>
 #include <linux/hdmi-notifier.h>
 
+#include <drm/bridge/dw_hdmi.h>
+
 #include "rockchip_i2s.h"
 #include "../codecs/ts3a227e.h"
 
@@ -135,6 +137,7 @@ static int hdmi_rk_init(struct snd_soc_pcm_runtime *runtime)
 {
 	struct snd_soc_card *card = runtime->card;
 	struct snd_soc_codec *codec = runtime->codec;
+	unsigned int jack_status;
 	int ret;
 
 	/* enable jack detection */
@@ -145,6 +148,9 @@ static int hdmi_rk_init(struct snd_soc_pcm_runtime *runtime)
 		dev_err(card->dev, "Can't create HDMI Jack %d\n", ret);
 		return ret;
 	}
+
+	jack_status = dw_hdmi_get_hpd_state() ? SND_JACK_LINEOUT : 0;
+	snd_soc_jack_report(&hdmi_card_jack, jack_status, SND_JACK_LINEOUT);
 
 	return hdmi_codec_set_jack_detect(codec, &hdmi_card_jack);
 }

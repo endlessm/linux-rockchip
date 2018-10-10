@@ -198,6 +198,7 @@ enum drm_connector_status dw_hdmi_phy_read_hpd(struct dw_hdmi *hdmi,
 void dw_hdmi_set_sample_rate(struct dw_hdmi *hdmi, unsigned int rate);
 void dw_hdmi_audio_enable(struct dw_hdmi *hdmi);
 void dw_hdmi_audio_disable(struct dw_hdmi *hdmi);
+bool dw_hdmi_get_hpd_state(void);
 
 /* PHY configuration */
 void dw_hdmi_phy_i2c_write(struct dw_hdmi *hdmi, unsigned short data,

@@ -50,6 +50,8 @@
 #define HDMI_EDID_LEN		512
 #define DDC_SEGMENT_ADDR       0x30
 
+static bool hpd_state;
+
 enum hdmi_datamap {
 	RGB444_8B = 0x01,
 	RGB444_10B = 0x03,
@@ -364,7 +366,10 @@ static bool check_hdmi_irq(struct dw_hdmi *hdmi, int intr_stat,
 		msecs = 20;
 		hdmi->hpd_state = false;
 	}
+
 	mod_delayed_work(hdmi->workqueue, &hdmi->work, msecs_to_jiffies(msecs));
+
+	hpd_state = hdmi->hpd_state;
 
 	return true;
 }
@@ -838,6 +843,12 @@ void dw_hdmi_audio_disable(struct dw_hdmi *hdmi)
 	spin_unlock_irqrestore(&hdmi->audio_lock, flags);
 }
 EXPORT_SYMBOL_GPL(dw_hdmi_audio_disable);
+
+bool dw_hdmi_get_hpd_state(void)
+{
+	return hpd_state;
+}
+EXPORT_SYMBOL_GPL(dw_hdmi_get_hpd_state);
 
 static bool hdmi_bus_fmt_is_rgb(unsigned int bus_format)
 {
