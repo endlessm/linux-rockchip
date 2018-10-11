@@ -526,6 +526,7 @@ static int hdmi_codec_probe(struct platform_device *pdev)
 	}
 
 	hcp->dev = dev;
+	hcp->jack_status = 0xFFFF;
 
 	return 0;
 }
