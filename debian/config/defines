@@ -20,7 +20,7 @@ ignore-changes:
 [base]
 arches:
  armhf
-compiler: gcc-4.9
+compiler: gcc-4.8
 featuresets:
  none
  rt

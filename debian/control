@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Debian Kernel Team <debian-kernel@lists.debian.org>
 Uploaders: Bastian Blank <waldi@debian.org>, maximilian attems <maks@debian.org>, Ben Hutchings <ben@decadent.org.uk>
 Standards-Version: 3.9.5
-Build-Depends: debhelper, python, quilt, cpio, kmod, xz-utils, kernel-wedge (>= 2.93~), bc, libssl-dev, u-boot-tools, device-tree-compiler, vboot-kernel-utils, gcc-4.9 [armhf]
+Build-Depends: debhelper, python, quilt, cpio, kmod, xz-utils, kernel-wedge (>= 2.93~), bc, libssl-dev, u-boot-tools, device-tree-compiler, vboot-kernel-utils, gcc-4.8 [armhf]
 Build-Depends-Indep: patchutils, xmlto
 Homepage: https://www.kernel.org/
 Vcs-Browser: https://anonscm.debian.org/cgit/kernel/linux.git
@@ -47,7 +47,7 @@ Description: Linux 4.4 for RK3288
 
 Package: linux-headers-4.4.0-1-rockchip
 Architecture: armhf
-Depends: linux-headers-4.4.0-1-common (= ${binary:Version}), linux-kbuild-4.4, ${misc:Depends}, linux-compiler-gcc-4.9-arm
+Depends: linux-headers-4.4.0-1-common (= ${binary:Version}), linux-kbuild-4.4, ${misc:Depends}, linux-compiler-gcc-4.8-arm
 Description: Header files for Linux 4.4.0-1-rockchip
  This package provides the architecture-specific kernel header files for
  Linux kernel 4.4.0-1-rockchip, generally used for building out-of-tree
